@@ -9,8 +9,26 @@ import SwiftUI
 
 @main
 struct ShadeApp: App {
+    @Environment(\.openSettings) private var openSettings
+
     var body: some Scene {
-        WindowGroup {
+        MenuBarExtra("Shade", systemImage: "cursor.rays") {
+            Button("Settings...") {
+                // Activate the app so the settings window appears in front
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                openSettings()
+            }
+            .keyboardShortcut(",")
+
+            Divider()
+
+            Button("Quit") {
+                NSApplication.shared.terminate(nil)
+            }
+            .keyboardShortcut("q")
+        }
+
+        Settings {
             ContentView()
         }
     }

@@ -9,11 +9,17 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
+        VStack(spacing: 20) {
+            Image(systemName: "cursor.rays")
                 .imageScale(.large)
+                .font(.system(size: 48))
                 .foregroundStyle(.tint)
-            Text("Hello, world!")
+
+            Text("Shade Settings")
+                .font(.title)
+
+            Text("Configure your preferences here")
+                .foregroundStyle(.secondary)
         }
         .padding()
     }
