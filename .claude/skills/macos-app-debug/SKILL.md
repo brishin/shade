@@ -54,7 +54,7 @@ scripts/kill-shade.sh
 ```bash
 scripts/watch-logs.sh [all|permissions|windows|lifecycle]
 /usr/bin/log stream --predicate 'subsystem == "com.brishin.Shade"' --style compact
-/usr/bin/log show --predicate 'subsystem == "com.brishin.Shade"' --last 30s --style compact
+/usr/bin/log show --predicate 'subsystem == "com.brishin.Shade"' --last 1m --style compact --info --debug
 ```
 
 **Category Filtering:**
@@ -88,7 +88,7 @@ func enumerateWindows() {
 **No logs appearing:**
 ```bash
 ps aux | grep Shade
-/usr/bin/log show --predicate 'subsystem == "com.brishin.Shade"' --last 1m
+/usr/bin/log show --predicate 'subsystem == "com.brishin.Shade"' --last 1m --style compact --info --debug
 ```
 
 **App exits immediately:**
