@@ -9,19 +9,38 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "cursor.rays")
-                .imageScale(.large)
-                .font(.system(size: 48))
-                .foregroundStyle(.tint)
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                Image(systemName: "cursor.rays")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.tint)
 
-            Text("Shade Settings")
-                .font(.title)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Shade")
+                        .font(.title2)
+                        .fontWeight(.semibold)
 
-            Text("Configure your preferences here")
-                .foregroundStyle(.secondary)
+                    Text("Display settings and controls")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+            .padding(20)
+            .background(.background.opacity(0.5))
+
+            Divider()
+
+            Form {
+                Section {
+                    Text("Settings will appear here")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
         }
-        .padding()
+        .frame(width: 500, height: 400)
     }
 }
 
