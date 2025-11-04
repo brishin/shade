@@ -93,58 +93,49 @@ class WindowManager {
         // Clear existing cache
         spaceNameCache.removeAll()
 
-        // Get all Spaces using private API
-        guard let spacesArrayRef = CGSCopySpaces(connectionID, Int32(kCGSAllSpacesMask)) else {
-            logger.warning("🪟 ⚠️ Failed to get Spaces list")
+        // Get managed display spaces using the CGSCopyManagedDisplaySpaces API
+        guard let managedDisplaySpacesRef = CGSCopyManagedDisplaySpaces(connectionID) else {
+            logger.warning("🪟 ⚠️ Failed to get managed display spaces")
             return
         }
 
-        // Convert Unmanaged<CFArray> to NSArray safely (same pattern as getSpaceIDForWindow)
-        let spacesArray = spacesArrayRef.takeRetainedValue() as NSArray
+        // Convert to NSArray
+        let managedDisplaySpaces = managedDisplaySpacesRef.takeRetainedValue() as NSArray
 
-        logger.info("🪟 Found \(spacesArray.count) Spaces")
+        logger.info("🪟 Found \(managedDisplaySpaces.count) displays")
 
-        // Iterate through all Spaces and get their names
-        var desktopIndex = 1
-        for spaceObj in spacesArray {
-            guard let spaceID = (spaceObj as? NSNumber)?.uint64Value else {
+        var desktopCounter = 1
+
+        // Iterate through each display
+        for displayObj in managedDisplaySpaces {
+            guard let displayDict = displayObj as? [String: Any] else {
                 continue
             }
 
-            var spaceName: String? = nil
+            // Get the "Spaces" array for this display
+            guard let spacesArray = displayDict["Spaces"] as? [[String: Any]] else {
+                continue
+            }
 
-            // Try to get the Space name using CGSSpaceCopyName
-            if let spaceNameRef = CGSSpaceCopyName(connectionID, spaceID) {
-                let name = spaceNameRef.takeRetainedValue() as String
-                logger.debug("🪟 Space \(spaceID, privacy: .public): CGSSpaceCopyName returned \"\(name, privacy: .public)\"")
+            logger.info("🪟 Display has \(spacesArray.count) user desktops")
 
-                // If the name is not empty and not just a UUID, use it
-                // Otherwise fall through to index-based naming
-                if !name.isEmpty {
-                    // Check if this is a meaningful name (not empty, not just whitespace, not a UUID pattern)
-                    let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    // Simple heuristic: if name contains "Desktop" or is very long (likely a UUID),
-                    // use index-based naming instead
-                    if !trimmedName.isEmpty &&
-                       !trimmedName.contains(where: { $0 == "-" && trimmedName.count > 30 }) {
-                        spaceName = trimmedName
-                    }
+            // All Spaces returned by CGSCopyManagedDisplaySpaces are user desktops
+            // Number them sequentially in the order they appear
+            for spaceDict in spacesArray {
+                // Extract space ID
+                guard let spaceID = spaceDict["id64"] as? UInt64 else {
+                    continue
                 }
-            }
 
-            // Fallback: Use index-based naming (Desktop 1, Desktop 2, etc.)
-            // This provides a predictable, user-friendly name when CGS doesn't return a good name
-            if spaceName == nil {
-                spaceName = "Desktop \(desktopIndex)"
-                logger.debug("🪟 Space \(spaceID, privacy: .public): Using index-based name \"\(spaceName!, privacy: .public)\"")
+                // This is a user desktop - assign it a sequential number
+                let spaceName = "Desktop \(desktopCounter)"
+                spaceNameCache[spaceID] = spaceName
+                logger.info("🪟 Space \(spaceID, privacy: .public): User desktop → \"\(spaceName, privacy: .public)\"")
+                desktopCounter += 1
             }
-
-            spaceNameCache[spaceID] = spaceName
-            desktopIndex += 1
         }
 
-        logger.info("🪟 Space name cache built with \(self.spaceNameCache.count) entries")
+        logger.info("🪟 Space name cache built with \(self.spaceNameCache.count) entries, \(desktopCounter - 1) user desktops")
     }
 
     private func getSpaceIDForWindow(_ windowID: CGWindowID, connectionID: CGSConnectionID) -> CGSSpaceID? {
@@ -168,6 +159,38 @@ class WindowManager {
         }
 
         return spaceNumber.uint64Value
+    }
+
+    func getCurrentSpaceID() -> CGSSpaceID {
+        let connectionID = CGSMainConnectionID()
+        return CGSGetActiveSpace(connectionID)
+    }
+
+    func getSpacesInfo() -> [SpaceInfo] {
+        let groupedBySpace = Dictionary(grouping: windows) { $0.spaceID }
+        let sortedSpaces = groupedBySpace.keys.sorted { ($0 ?? 0) < ($1 ?? 0) }
+
+        var spacesInfo: [SpaceInfo] = []
+
+        for spaceID in sortedSpaces {
+            guard let space = spaceID,
+                  let windowsInSpace = groupedBySpace[spaceID] else { continue }
+
+            // Get the cached name for this Space
+            guard let spaceName = spaceNameCache[space] else { continue }
+
+            // Filter out non-desktop Spaces (only include those that start with "Desktop ")
+            guard spaceName.hasPrefix("Desktop ") else { continue }
+
+            let spaceInfo = SpaceInfo(
+                id: space,
+                name: spaceName,
+                windowCount: windowsInSpace.count
+            )
+            spacesInfo.append(spaceInfo)
+        }
+
+        return spacesInfo
     }
 
     private func logWindows(_ windows: [WindowInfo]) {

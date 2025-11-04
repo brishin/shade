@@ -14,12 +14,15 @@ private let logger = Logger(subsystem: "com.brishin.Shade", category: "AppLifecy
 struct ShadeApp: App {
     @State private var accessibilityManager = AccessibilityManager()
     @State private var windowManager = WindowManager()
+    @State private var keyMonitor = KeyMonitor()
+    @State private var overlayWindowManager = OverlayWindowManager()
+    @State private var overlayWindow: NSWindow?
 
     init() {
         logger.info("🚀 Shade app initializing")
 
-        // Trigger window enumeration after a short delay to allow app to fully initialize
-        Task { @MainActor in
+        // Trigger window enumeration and overlay setup after a short delay
+        Task { @MainActor [self] in
             try? await Task.sleep(for: .seconds(0.5))
             let manager = AccessibilityManager()
             let winManager = WindowManager()
@@ -29,24 +32,71 @@ struct ShadeApp: App {
             } else {
                 logger.info("🔐 App initialized without permissions - skipping enumeration")
             }
+
+            // Set up overlay window
+            await setupOverlay()
+        }
+    }
+
+    @MainActor
+    private func setupOverlay() {
+        logger.info("🎯 Setting up overlay window")
+        keyMonitor.startMonitoring()
+
+        // Create the overlay window
+        let currentSpaceID = windowManager.getCurrentSpaceID()
+        let overlayView = DesktopOverlayView(
+            windowManager: windowManager,
+            currentSpaceID: currentSpaceID
+        )
+        overlayWindow = overlayWindowManager.createOverlayWindow(content: overlayView)
+
+        // Observe option key changes
+        Task { @MainActor in
+            await observeKeyChanges()
+        }
+    }
+
+    @MainActor
+    private func observeKeyChanges() async {
+        var previousState = false
+        while true {
+            try? await Task.sleep(for: .milliseconds(100))
+            let currentState = keyMonitor.isOptionKeyPressed
+
+            // Only act when state changes
+            if currentState != previousState {
+                previousState = currentState
+
+                if currentState {
+                    // Refresh window data before showing
+                    windowManager.enumerateWindows()
+
+                    // Update the overlay with current space info
+                    let currentSpaceID = windowManager.getCurrentSpaceID()
+                    let overlayView = DesktopOverlayView(
+                        windowManager: windowManager,
+                        currentSpaceID: currentSpaceID
+                    )
+
+                    // Update window content
+                    overlayWindow?.contentView = NSHostingView(rootView: overlayView)
+                    overlayWindowManager.showOverlay()
+                } else {
+                    overlayWindowManager.hideOverlay()
+                }
+            }
         }
     }
 
     var body: some Scene {
         MenuBarExtra("Shade", systemImage: "cursor.rays") {
-            Button("Settings...") {
-                NSApplication.shared.activate(ignoringOtherApps: true)
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            }
-            .keyboardShortcut(",")
-            .disabled(!accessibilityManager.isAccessibilityGranted)
-
-            Divider()
-
-            Button("Quit") {
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q")
+            MenuBarContentView(
+                accessibilityManager: accessibilityManager,
+                keyMonitor: keyMonitor,
+                windowManager: windowManager,
+                overlayWindowManager: overlayWindowManager
+            )
         }
         .menuBarExtraStyle(.menu)
 
@@ -140,5 +190,28 @@ struct SettingsContentView: View {
                 windowManager.enumerateWindows()
             }
         }
+    }
+}
+
+struct MenuBarContentView: View {
+    let accessibilityManager: AccessibilityManager
+    let keyMonitor: KeyMonitor
+    let windowManager: WindowManager
+    let overlayWindowManager: OverlayWindowManager
+
+    var body: some View {
+        Button("Settings...") {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
+        .keyboardShortcut(",")
+        .disabled(!accessibilityManager.isAccessibilityGranted)
+
+        Divider()
+
+        Button("Quit") {
+            NSApplication.shared.terminate(nil)
+        }
+        .keyboardShortcut("q")
     }
 }

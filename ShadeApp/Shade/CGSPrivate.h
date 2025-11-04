@@ -38,6 +38,9 @@ extern CFArrayRef CGSCopySpaces(CGSConnectionID cid, int mask);
 // Note: This often returns UUIDs or empty strings for regular desktops
 extern CFStringRef CGSSpaceCopyName(CGSConnectionID cid, CGSSpaceID spaceID);
 
+// Get the sequential number/index of a Space (Desktop 1, Desktop 2, etc.)
+extern int CGSSpaceGetAbsoluteLevel(CGSConnectionID cid, CGSSpaceID spaceID);
+
 // Selector constants for CGSCopySpacesForWindows
 enum {
     kCGSAllSpacesMask = 0x1F,
