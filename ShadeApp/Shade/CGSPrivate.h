@@ -29,6 +29,15 @@ extern CGSSpaceID CGSGetActiveSpace(CGSConnectionID cid);
 // Get list of Spaces that a window belongs to
 extern CFArrayRef CGSCopySpacesForWindows(CGSConnectionID cid, int selector, CFArrayRef windowIDs);
 
+// Get all Spaces across all displays
+// Returns a CFArrayRef that must be released with CFRelease (follows Copy convention)
+extern CFArrayRef CGSCopySpaces(CGSConnectionID cid, int mask);
+
+// Get the user-assigned name for a Space
+// Returns a CFStringRef that must be released with CFRelease (follows Copy convention)
+// Note: This often returns UUIDs or empty strings for regular desktops
+extern CFStringRef CGSSpaceCopyName(CGSConnectionID cid, CGSSpaceID spaceID);
+
 // Selector constants for CGSCopySpacesForWindows
 enum {
     kCGSAllSpacesMask = 0x1F,
