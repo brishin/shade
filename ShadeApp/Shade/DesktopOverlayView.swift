@@ -1,83 +1,77 @@
 import SwiftUI
+import OSLog
+
+private let logger = Logger(subsystem: "com.brishin.Shade", category: "DesktopOverlay")
+
+@Observable
+class OverlayState {
+    var currentSpaceID: CGSSpaceID?
+
+    init(currentSpaceID: CGSSpaceID? = nil) {
+        self.currentSpaceID = currentSpaceID
+    }
+}
 
 struct DesktopOverlayView: View {
     let windowManager: WindowManager
-    let currentSpaceID: CGSSpaceID?
+    var state: OverlayState
 
     var body: some View {
-        VStack(spacing: 0) {
+        let _ = logger.info("🎨 DesktopOverlayView body evaluated with currentSpaceID: \(self.state.currentSpaceID ?? 0)")
+        let _ = logger.info("🎨 Spaces: \(self.spaces.map { "Space \($0.id): \($0.name)" }.joined(separator: ", "))")
+
+        return VStack {
             Spacer()
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(topBorder)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.white)
+            HStack(spacing: 16) {
+                ForEach(spaces, id: \.id) { space in
+                    let isActive = space.id == state.currentSpaceID
+                    let _ = logger.info("🎨 Creating DesktopBoxView for Space \(space.id) (\(space.name)) - isActive: \(isActive) (comparing \(space.id) == \(self.state.currentSpaceID ?? 0))")
 
-                Text(title)
-                    .font(.system(.body, design: .monospaced, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text(separator)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.white)
-
-                ForEach(spaceInfoLines, id: \.self) { line in
-                    Text(line)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(line.contains("►") ? .green : .white)
+                    DesktopBoxView(
+                        space: space,
+                        isActive: isActive
+                    )
                 }
-
-                Text(bottomBorder)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.white)
             }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.95)
-            )
-            .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
-            .padding(.bottom, 60)
+            .padding(.bottom, 20)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var topBorder: String {
-        "╔═══════════════════════════════════════╗"
+    private var spaces: [SpaceInfo] {
+        let spacesList = windowManager.getSpacesInfo()
+        return spacesList.isEmpty ? [] : spacesList
     }
+}
 
-    private var bottomBorder: String {
-        "╚═══════════════════════════════════════╝"
-    }
+struct DesktopBoxView: View {
+    let space: SpaceInfo
+    let isActive: Bool
 
-    private var separator: String {
-        "╟───────────────────────────────────────╢"
-    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 4) {
+                if isActive {
+                    Text("►")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.green)
+                }
 
-    private var title: String {
-        "║          DESKTOP OVERVIEW           ║"
-    }
+                Text(space.name)
+                    .font(.system(.body, design: .monospaced, weight: .bold))
+                    .foregroundColor(.white)
+            }
 
-    private var spaceInfoLines: [String] {
-        let spaces = windowManager.getSpacesInfo()
-        var lines: [String] = []
-
-        for space in spaces {
-            let isActive = space.id == currentSpaceID
-            let indicator = isActive ? "► " : "  "
-            let spaceName = space.name.padding(toLength: 12, withPad: " ", startingAt: 0)
-            let windowCount = "\(space.windowCount) windows".padding(toLength: 12, withPad: " ", startingAt: 0)
-
-            let line = "║ \(indicator)\(spaceName) │ \(windowCount) ║"
-            lines.append(line)
+            Text("\(space.windowCount) windows")
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(.white.opacity(0.8))
         }
-
-        if lines.isEmpty {
-            lines.append("║  No desktop information available    ║")
+        .padding(20)
+        .glassEffect(in: .rect(cornerRadius: 12.0))
+        .onAppear {
+            logger.info("📦 DesktopBoxView for Space \(space.id) (\(space.name)): isActive = \(isActive)")
         }
-
-        return lines
     }
 }
 
@@ -90,6 +84,6 @@ struct SpaceInfo {
 #Preview {
     DesktopOverlayView(
         windowManager: WindowManager(),
-        currentSpaceID: nil
+        state: OverlayState()
     )
 }

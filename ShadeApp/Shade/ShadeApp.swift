@@ -17,6 +17,7 @@ struct ShadeApp: App {
     @State private var keyMonitor = KeyMonitor()
     @State private var overlayWindowManager = OverlayWindowManager()
     @State private var overlayWindow: NSWindow?
+    @State private var overlayState = OverlayState()
 
     init() {
         logger.info("🚀 Shade app initializing")
@@ -43,11 +44,27 @@ struct ShadeApp: App {
         logger.info("🎯 Setting up overlay window")
         keyMonitor.startMonitoring()
 
-        // Create the overlay window
-        let currentSpaceID = windowManager.getCurrentSpaceID()
+        // Register for Space change notifications
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [self] _ in
+            Task { @MainActor in
+                let newSpaceID = self.windowManager.getCurrentSpaceID()
+                logger.info("🔄 Space changed to: \(newSpaceID)")
+
+                // Update overlay state if it's currently visible
+                if self.overlayWindow?.isVisible == true {
+                    self.overlayState.currentSpaceID = newSpaceID
+                }
+            }
+        }
+
+        // Create the overlay window (will be updated when Option is pressed)
         let overlayView = DesktopOverlayView(
             windowManager: windowManager,
-            currentSpaceID: currentSpaceID
+            state: overlayState
         )
         overlayWindow = overlayWindowManager.createOverlayWindow(content: overlayView)
 
@@ -69,18 +86,16 @@ struct ShadeApp: App {
                 previousState = currentState
 
                 if currentState {
-                    // Refresh window data before showing
+                    // Refresh window data and current space before showing
                     windowManager.enumerateWindows()
+                    let fetchedSpaceID = windowManager.getCurrentSpaceID()
+                    logger.info("🔍 Fetched Space ID: \(fetchedSpaceID)")
 
-                    // Update the overlay with current space info
-                    let currentSpaceID = windowManager.getCurrentSpaceID()
-                    let overlayView = DesktopOverlayView(
-                        windowManager: windowManager,
-                        currentSpaceID: currentSpaceID
-                    )
+                    logger.info("🎯 Showing overlay for Space ID: \(fetchedSpaceID)")
 
-                    // Update window content
-                    overlayWindow?.contentView = NSHostingView(rootView: overlayView)
+                    // Update the overlay state
+                    overlayState.currentSpaceID = fetchedSpaceID
+
                     overlayWindowManager.showOverlay()
                 } else {
                     overlayWindowManager.hideOverlay()

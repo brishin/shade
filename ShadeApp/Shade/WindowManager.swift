@@ -162,30 +162,52 @@ class WindowManager {
     }
 
     func getCurrentSpaceID() -> CGSSpaceID {
+        logger.info("🔄 getCurrentSpaceID called")
         let connectionID = CGSMainConnectionID()
-        return CGSGetActiveSpace(connectionID)
+        let maxRetries = 5
+        let retryDelay: TimeInterval = 0.05 // 50 milliseconds
+
+        for attempt in 1...maxRetries {
+            let spaceID = CGSGetActiveSpace(connectionID)
+            logger.info("🔄 Attempt \(attempt): CGSGetActiveSpace returned \(spaceID)")
+
+            // A return value of 0 indicates failure - retry
+            if spaceID != 0 {
+                logger.info("🔄 getCurrentSpaceID succeeded with Space ID: \(spaceID)")
+                return spaceID
+            }
+
+            // Wait before retrying (except on last attempt)
+            if attempt < maxRetries {
+                logger.info("🔄 Space ID was 0, retrying after \(retryDelay)s delay...")
+                Thread.sleep(forTimeInterval: retryDelay)
+            }
+        }
+
+        // All retries failed
+        logger.warning("⚠️ getCurrentSpaceID failed after \(maxRetries) attempts - returning 0")
+        return 0
     }
 
     func getSpacesInfo() -> [SpaceInfo] {
         let groupedBySpace = Dictionary(grouping: windows) { $0.spaceID }
-        let sortedSpaces = groupedBySpace.keys.sorted { ($0 ?? 0) < ($1 ?? 0) }
+
+        // Get all desktop Spaces from cache (those that start with "Desktop ")
+        let desktopSpaces = spaceNameCache.filter { $0.value.hasPrefix("Desktop ") }
+        let sortedSpaceIDs = desktopSpaces.keys.sorted()
 
         var spacesInfo: [SpaceInfo] = []
 
-        for spaceID in sortedSpaces {
-            guard let space = spaceID,
-                  let windowsInSpace = groupedBySpace[spaceID] else { continue }
+        for spaceID in sortedSpaceIDs {
+            guard let spaceName = spaceNameCache[spaceID] else { continue }
 
-            // Get the cached name for this Space
-            guard let spaceName = spaceNameCache[space] else { continue }
-
-            // Filter out non-desktop Spaces (only include those that start with "Desktop ")
-            guard spaceName.hasPrefix("Desktop ") else { continue }
+            // Get window count (0 if no windows on this Space)
+            let windowCount = groupedBySpace[spaceID]?.count ?? 0
 
             let spaceInfo = SpaceInfo(
-                id: space,
+                id: spaceID,
                 name: spaceName,
-                windowCount: windowsInSpace.count
+                windowCount: windowCount
             )
             spacesInfo.append(spaceInfo)
         }
